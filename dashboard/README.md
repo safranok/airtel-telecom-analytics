@@ -8,7 +8,7 @@ From the project root, run:
 python -m streamlit run dashboard/app.py
 ```
 
-The dashboard reads `data/raw/airtel.db` locally. In Streamlit Cloud, keep the database in private storage and add its HTTPS URL and optional bearer token to the app's **Settings → Secrets**; the app downloads and decompresses the archive into temporary storage on startup. Never commit the database or its access token. Use this Secrets configuration:
+The dashboard reads `data/raw/airtel.db` locally. In Streamlit Cloud, it downloads the compressed demo database from the configured Google Drive file and extracts it into temporary storage on startup. The demo file must be shared as **Anyone with the link**. The project owner confirmed the dataset is made-up project data. Do not use this public-link setup for real customer records. To override the Drive source, add a URL under the app's **Settings → Secrets**:
 
 ```toml
 [database]
@@ -17,7 +17,7 @@ bearer_token = "YOUR_PRIVATE_BEARER_TOKEN"
 version = "1"
 ```
 
-The URL must return the gzip-compressed `airtel.db.gz` file. Leave `bearer_token` empty if the URL itself is a private signed URL. Increment `version` when replacing the database so the app fetches the new copy. The masthead uses a white Airtel wordmark. A full-height dark-red panel sits on the left and applies region, connection type, and device selections across both tabs; each chart also retains its own local **Filters** popover and lowercase chart-type label. White chart cards with red highlights keep the Airtel theme clear and consistent. Install `dashboard/requirements.txt` only if the active Python environment does not already provide Streamlit, Pandas, and Plotly:
+The URL must return the gzip-compressed `airtel.db.gz` file. `bearer_token` is optional. Increment `version` when replacing the database so the app fetches the new copy. The masthead uses a white Airtel wordmark. A full-height dark-red panel sits on the left and applies region, connection type, and device selections across both tabs; each chart also retains its own local **Filters** popover and lowercase chart-type label. White chart cards with red highlights keep the Airtel theme clear and consistent. Install `dashboard/requirements.txt` only if the active Python environment does not already provide Streamlit, Pandas, and Plotly:
 
 ```powershell
 python -m pip install -r dashboard/requirements.txt

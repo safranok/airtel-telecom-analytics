@@ -14,6 +14,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "raw" / "airtel.db"
 DB_LOAD_ERROR = None
+PUBLIC_DEMO_DRIVE_FILE_ID = "14XWxgMvgCppeLE9p7QSdWsu-GcaaIKZJ"
 
 def resolve_database():
     """Use the local database or fetch its compressed copy from private storage."""
@@ -25,7 +26,7 @@ def resolve_database():
         config = {}
     url = str(config.get("url", "")).strip()
     if not url:
-        return None, None
+        url = f"https://drive.google.com/uc?export=download&id={PUBLIC_DEMO_DRIVE_FILE_ID}"
     token = str(config.get("bearer_token", "")).strip()
     version = str(config.get("version", "1"))
     cache_key = hashlib.sha256(f"{url}|{version}".encode()).hexdigest()[:16]
@@ -45,7 +46,7 @@ def resolve_database():
     except Exception as error:
         archive.unlink(missing_ok=True)
         database.unlink(missing_ok=True)
-        return None, f"Database download failed ({type(error).__name__}). Check the private URL and access token."
+        return None, f"Database download failed ({type(error).__name__}). Set the demo file in Google Drive to Anyone with the link, then restart the app."
 
 st.set_page_config(page_title="Airtel | Network intelligence", page_icon="📶", layout="wide", initial_sidebar_state="collapsed")
 DB, DB_LOAD_ERROR = resolve_database()
@@ -153,7 +154,7 @@ if data is None:
     if DB_LOAD_ERROR:
         st.error(DB_LOAD_ERROR)
     else:
-        st.error("The Airtel database is not configured. Add a private compressed database URL under [database] in Streamlit Cloud Secrets.")
+        st.error("The Airtel demo database is not reachable. Set its Google Drive sharing to Anyone with the link, then restart the app.")
     st.stop()
 usage,complaints,customers=data
 st.markdown('<div class="airtel-header"><div class="airtel-logo" aria-label="Airtel">airtel</div><div class="airtel-divider"></div><div><div class="airtel-title">Airtel Telecom Analytics</div><div class="airtel-subtitle">Network Usage &amp; Customer Experience</div></div></div>',unsafe_allow_html=True)
