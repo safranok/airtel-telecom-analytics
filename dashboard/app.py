@@ -1,6 +1,11 @@
 """Two-tab Airtel usage and service-quality dashboard."""
 from pathlib import Path
+import hashlib
+import gzip
+import shutil
 import sqlite3
+import tempfile
+import urllib.request
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -8,7 +13,42 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "raw" / "airtel.db"
+DB_LOAD_ERROR = None
+
+def resolve_database():
+    """Use the local database or fetch its compressed copy from private storage."""
+    if DB.exists():
+        return DB, None
+    try:
+        config = st.secrets.get("database", {})
+    except Exception:
+        config = {}
+    url = str(config.get("url", "")).strip()
+    if not url:
+        return None, None
+    token = str(config.get("bearer_token", "")).strip()
+    version = str(config.get("version", "1"))
+    cache_key = hashlib.sha256(f"{url}|{version}".encode()).hexdigest()[:16]
+    database = Path(tempfile.gettempdir()) / f"airtel-telecom-analytics-{cache_key}.db"
+    if database.exists() and database.stat().st_size:
+        return database, None
+    archive = database.with_suffix(".db.gz")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response, archive.open("wb") as target:
+            shutil.copyfileobj(response, target)
+        with gzip.open(archive, "rb") as compressed, database.open("wb") as target:
+            shutil.copyfileobj(compressed, target)
+        archive.unlink(missing_ok=True)
+        return database, None
+    except Exception as error:
+        archive.unlink(missing_ok=True)
+        database.unlink(missing_ok=True)
+        return None, f"Database download failed ({type(error).__name__}). Check the private URL and access token."
+
 st.set_page_config(page_title="Airtel | Network intelligence", page_icon="📶", layout="wide", initial_sidebar_state="collapsed")
+DB, DB_LOAD_ERROR = resolve_database()
 NAVY, RED, MUTED = "#7A0019", "#D71935", "#70565A"
 PAPER, WHITE, PLUM, ACCENT_RED = "#FFFFFF", "#FFFFFF", "#7A0019", "#A80E2B"
 st.markdown(f"""
@@ -62,7 +102,7 @@ footer {{visibility:hidden}}
 
 @st.cache_data(show_spinner="Loading project data…")
 def read_data():
-    if not DB.exists(): return None
+    if DB is None or not DB.exists(): return None
     with sqlite3.connect(DB) as con:
         u=pd.read_sql_query("""SELECT u.usage_date,u.customer_id,u.data_mb,u.voice_minutes,u.is_roaming,c.connection_type,c.device_type,c.age_band,ci.region,ci.circle_name FROM usage_daily u JOIN customers c USING(customer_id) LEFT JOIN circles ci USING(circle_id)""",con)
         q=pd.read_sql_query("SELECT category,channel,is_resolved,resolution_days,customer_id FROM complaints",con)
@@ -109,7 +149,12 @@ def chart_filters(df, fields, prefix, chart_kind):
     return result
 
 data=read_data()
-if data is None: st.error("Place airtel.db in data/raw/ and reopen this dashboard."); st.stop()
+if data is None:
+    if DB_LOAD_ERROR:
+        st.error(DB_LOAD_ERROR)
+    else:
+        st.error("The Airtel database is not configured. Add a private compressed database URL under [database] in Streamlit Cloud Secrets.")
+    st.stop()
 usage,complaints,customers=data
 st.markdown('<div class="airtel-header"><div class="airtel-logo" aria-label="Airtel">airtel</div><div class="airtel-divider"></div><div><div class="airtel-title">Airtel Telecom Analytics</div><div class="airtel-subtitle">Network Usage &amp; Customer Experience</div></div></div>',unsafe_allow_html=True)
 filter_panel,dashboard_panel=st.columns([.23,.77],gap="small")
