@@ -2,14 +2,11 @@
 from pathlib import Path
 import hashlib
 import gzip
-import html
-import http.cookiejar
-import re
 import shutil
 import sqlite3
 import tempfile
-import urllib.parse
 import urllib.request
+import gdown
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -20,43 +17,8 @@ DB = ROOT / "data" / "raw" / "airtel.db"
 DB_LOAD_ERROR = None
 PUBLIC_DEMO_DRIVE_FILE_ID = "14XWxgMvgCppeLE9p7QSdWsu-GcaaIKZJ"
 
-def download_gzip(url, archive, headers):
-    """Download a gzip file, following Google's large-file confirmation page."""
-    cookies = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
-
-    def save_response(request):
-        with opener.open(request, timeout=90) as response:
-            first = response.read(4096)
-            if first.startswith(b"\x1f\x8b"):
-                with archive.open("wb") as target:
-                    target.write(first)
-                    shutil.copyfileobj(response, target)
-                return True
-            page = html.unescape((first + response.read()).decode("utf-8", errors="replace"))
-            token = next((cookie.value for cookie in cookies if cookie.name.startswith("download_warning")), None)
-            if not token:
-                match = re.search(r'name=["\']confirm["\']\s+value=["\']([^"\']+)', page)
-                if not match:
-                    match = re.search(r"[?&]confirm=([\w-]+)", page)
-                token = match.group(1) if match else None
-            return token
-
-    initial = urllib.request.Request(url, headers=headers)
-    result = save_response(initial)
-    if result is True:
-        return
-    if not result:
-        raise ValueError("Google Drive did not return the database file")
-    parts = urllib.parse.urlsplit(url)
-    query = urllib.parse.parse_qs(parts.query)
-    query["confirm"] = [result]
-    confirmed_url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, urllib.parse.urlencode(query, doseq=True), parts.fragment))
-    if save_response(urllib.request.Request(confirmed_url, headers=headers)) is not True:
-        raise ValueError("Google Drive returned a page instead of the database file")
-
 def resolve_database():
-    """Use the local database or fetch its compressed copy from private storage."""
+    """Use the local database or fetch its compressed demo copy from Drive."""
     if DB.exists():
         return DB, None
     try:
@@ -75,7 +37,14 @@ def resolve_database():
     archive = database.with_suffix(".db.gz")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     try:
-        download_gzip(url, archive, headers)
+        if "drive.google.com" in url and not token:
+            downloaded = gdown.download(url=url, output=str(archive), quiet=True)
+            if not downloaded:
+                raise ValueError("Google Drive did not provide a downloadable file")
+        else:
+            request = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(request, timeout=90) as response, archive.open("wb") as target:
+                shutil.copyfileobj(response, target)
         with gzip.open(archive, "rb") as compressed, database.open("wb") as target:
             shutil.copyfileobj(compressed, target)
         archive.unlink(missing_ok=True)
@@ -83,7 +52,7 @@ def resolve_database():
     except Exception as error:
         archive.unlink(missing_ok=True)
         database.unlink(missing_ok=True)
-        return None, "The database download did not work. Check that the Drive file is shared as Anyone with the link, then restart the app."
+        return None, f"Database download failed ({type(error).__name__}). Check that the Drive file is shared as Anyone with the link, then restart the app."
 
 st.set_page_config(page_title="Airtel | Network intelligence", page_icon="📶", layout="wide", initial_sidebar_state="collapsed")
 DB, DB_LOAD_ERROR = resolve_database()

@@ -17,7 +17,7 @@ bearer_token = "YOUR_PRIVATE_BEARER_TOKEN"
 version = "1"
 ```
 
-The URL must return the gzip-compressed `airtel.db.gz` file. `bearer_token` is optional. Increment `version` when replacing the database so the app fetches the new copy. The masthead uses a white Airtel wordmark. A full-height dark-red panel sits on the left and applies region, connection type, and device selections across both tabs; each chart also retains its own local **Filters** popover and lowercase chart-type label. White chart cards with red highlights keep the Airtel theme clear and consistent. Install `dashboard/requirements.txt` only if the active Python environment does not already provide Streamlit, Pandas, and Plotly:
+The URL must return the gzip-compressed `airtel.db.gz` file. `bearer_token` is optional. Increment `version` when replacing the database so the app fetches the new copy. The masthead uses a white Airtel wordmark. A full-height dark-red panel sits on the left and applies region, connection type, and device selections across both tabs; each chart also retains its own local **Filters** popover and lowercase chart-type label. White chart cards with red highlights keep the Airtel theme clear and consistent. Install `dashboard/requirements.txt` if the active Python environment does not already provide Streamlit, Pandas, Plotly, and the Google Drive downloader:
 
 ```powershell
 python -m pip install -r dashboard/requirements.txt
